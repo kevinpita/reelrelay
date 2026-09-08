@@ -1,0 +1,5 @@
+apiVersion: v2
+name: igbot
+description: A Telegram bot that downloads Instagram videos.
+type: application
+version: 0.1.0

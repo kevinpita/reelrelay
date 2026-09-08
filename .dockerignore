@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!go.mod
+!go.sum
+!requirements.txt
+!*.go
+*_test.go
