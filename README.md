@@ -1,4 +1,4 @@
-# igbot
+# ReelRelay
 
 **Send an Instagram link to Telegram. Receive the video in the same chat.**
 
