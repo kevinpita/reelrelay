@@ -8,7 +8,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /igbot .
 
-FROM docker.io/library/python:3.13.15-slim-trixie@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS downloader
+FROM docker.io/library/python:3.14.7-slim-trixie@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS downloader
 COPY requirements.txt /requirements.txt
 # Match the interpreter path in distroless for the generated yt-dlp launcher.
 RUN ln -s /usr/local/bin/python /usr/bin/python \
