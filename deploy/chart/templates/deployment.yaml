@@ -1,0 +1,111 @@
+{{- $repository := required "image.repository is required" .Values.image.repository -}}
+{{- $secret := required "existingSecret is required" .Values.existingSecret -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: 1
+  # Telegram permits only one long-polling consumer per bot token.
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: igbot
+          {{- if .Values.image.digest }}
+          image: {{ printf "%s@%s" $repository .Values.image.digest | quote }}
+          {{- else }}
+          image: {{ printf "%s:%s" $repository (required "image.tag or image.digest is required" .Values.image.tag) | quote }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: health
+              containerPort: 8080
+          env:
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: TELEGRAM_BOT_TOKEN
+            - name: INSTAGRAM_SESSION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: INSTAGRAM_SESSION_ID
+                  optional: true
+            - name: MAX_CONCURRENT_DOWNLOADS
+              value: {{ .Values.maxConcurrentDownloads | quote }}
+            {{- if .Values.cookiesSecret }}
+            - name: INSTAGRAM_COOKIES_FILE
+              value: /var/run/instagram/cookies.txt
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: downloads
+              mountPath: /tmp
+            {{- if .Values.cookiesSecret }}
+            - name: instagram-cookies
+              mountPath: /var/run/instagram
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: downloads
+          emptyDir:
+            sizeLimit: {{ .Values.tmpSizeLimit | quote }}
+        {{- if .Values.cookiesSecret }}
+        - name: instagram-cookies
+          secret:
+            secretName: {{ .Values.cookiesSecret | quote }}
+            defaultMode: 288 # 0440 permissions, without YAML octal ambiguity.
+        {{- end }}
