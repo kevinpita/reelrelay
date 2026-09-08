@@ -154,14 +154,32 @@ CI does not install Nix, devenv, or Just. Run `just check` locally for the addit
 Pull requests do **not** publish images. Pushes to `main` and version tags such as `v1.0.0` publish `linux/amd64` images to:
 
 ```text
-ghcr.io/<lowercase-owner>/<lowercase-repository>
+ghcr.io/kevinpita/reelrelay
 ```
 
-Images receive only a full `sha-<commit>` tag. A version tag triggers CI but does not create a second image tag. CI records the published image digest in its job summary. It uses `GITHUB_TOKEN`; no bot credentials belong in CI. The workflow does not configure SBOM or provenance attestations.
+Images receive only the first eight characters of the commit SHA as their tag, with no `sha-` prefix. For example, commit `d5c8c3bdae712df7053669d69db2672f6a928175` produces `ghcr.io/kevinpita/reelrelay:d5c8c3bd`. The executable's `--version` output keeps the full commit SHA. A version tag triggers CI but does not create a second image tag. CI records the published image digest in its job summary. It uses `GITHUB_TOKEN`; no bot credentials belong in CI. The workflow does not configure SBOM or provenance attestations.
 
-[Deployment instructions](deploy/README.md) cover the [Helm chart](deploy/chart/), Kubernetes Secrets, and registry access. Set image and Secret references in `deploy/chart/values.yaml`. The chart uses one replica and the `Recreate` strategy because Telegram permits only one long-polling consumer per bot token.
+The [Helm chart](infra/chart/) uses image and Secret references from [`infra/chart/values.yaml`](infra/chart/values.yaml). The default image uses a published commit tag, not a moving `latest` tag. Helm does not select newer registry tags. To deploy another build, update `image.tag` or set `image.digest` to its published `sha256:...` digest. A non-empty digest takes priority over the tag.
 
-CI publishes images but does not access a cluster or edit deployment files. To deploy a new build, update the image digest in the chart values and run the documented Helm command. Registry publication alone does not trigger a deployment.
+Create the Secret named by `existingSecret` in the deployment namespace with a `TELEGRAM_BOT_TOKEN` key. Do not commit credentials. For private images, configure `imagePullSecrets`. The chart uses one replica and the `Recreate` strategy because Telegram permits only one long-polling consumer per bot token.
+
+### Argo CD
+
+CI builds, tests, and publishes images. Argo CD applies the deployment configuration from Git. Configure the Argo CD Application to track this repository's `main` branch at `infra/chart`.
+
+```text
+CI → publish GHCR image → update image reference in Git → Argo CD sync → Kubernetes
+```
+
+Registry publication alone does not trigger a deployment. Commit the new image tag or digest to the values file that Argo CD uses. Argo CD then deploys it when [automatic sync](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/) is enabled; otherwise, sync the application manually. CI needs no cluster credentials.
+
+Start with reviewed values changes. For automatic image updates, extend CI to open a values-update pull request after a successful image push. [Argo CD Image Updater with Git write-back](https://argocd-image-updater.readthedocs.io/en/stable/basics/update-methods/#git-write-back-method) is an alternative. Use only one of these to update image references. Before enabling either method, exclude values-only commits from image publication to prevent an update loop. Neither method is configured here.
+
+Without Argo CD, deploy with Helm after creating the required Secret:
+
+```bash
+helm upgrade --install igbot infra/chart --namespace igbot --create-namespace
+```
 
 ## Tool versions
 
@@ -199,6 +217,5 @@ devenv.nix / devenv.lock Development tools and fixed dependency versions
 justfile                Local development commands
 Dockerfile              Non-root runtime image
 .github/                CI and dependency updates
-deploy/chart/           Helm chart and deployment values
-deploy/README.md        Deployment instructions
+infra/chart/            Helm chart and deployment values
 ```

@@ -54,12 +54,12 @@ audit:
 
 # Render the Helm chart without accessing a cluster.
 k8s-render:
-    helm template igbot deploy/chart --namespace igbot
+    helm template igbot infra/chart --namespace igbot
 
 # Lint the Helm chart and validate the rendered Kubernetes resources.
 k8s-check:
-    helm lint --strict deploy/chart
-    helm template igbot deploy/chart --namespace igbot | kubeconform -strict -summary
+    helm lint --strict infra/chart
+    helm template igbot infra/chart --namespace igbot | kubeconform -strict -summary
 
 # Run all local checks.
 check: lint test audit k8s-check

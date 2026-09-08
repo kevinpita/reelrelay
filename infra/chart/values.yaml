@@ -1,11 +1,9 @@
 image:
-  repository: ghcr.io/replace-owner/replace-repo
-  tag: replace-with-sha-tag
-  # A digest takes priority over the tag.
+  repository: ghcr.io/kevinpita/reelrelay
+  tag: <pending>
   digest: ""
   pullPolicy: IfNotPresent
 
-# Reference Secrets created outside this chart. Do not put credentials here.
 existingSecret: igbot-secrets
 cookiesSecret: ""
 imagePullSecrets: []
