@@ -108,7 +108,7 @@ func run(ctx context.Context) error {
 	healthErrors := make(chan error, 1)
 	go func() { healthErrors <- server.Serve(listener) }()
 
-	log.Printf("igbot %s is ready as @%s", version, bot.Self.UserName)
+	log.Printf("reelrelay %s is ready as @%s", version, bot.Self.UserName)
 	updates := tgbotapi.NewUpdate(0)
 	updates.Timeout = 60
 	messages := bot.GetUpdatesChan(updates)

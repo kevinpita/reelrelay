@@ -14,7 +14,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	if mode := os.Getenv("IGBOT_TEST_HELPER"); mode != "" {
+	if mode := os.Getenv("REELRELAY_TEST_HELPER"); mode != "" {
 		runFakeDownloader(mode)
 		os.Exit(0)
 	}
@@ -39,7 +39,7 @@ func runFakeDownloader(mode string) {
 		}
 	}
 	encoded, _ := json.Marshal(args)
-	if err := os.WriteFile(os.Getenv("IGBOT_TEST_ARGS"), encoded, 0o600); err != nil {
+	if err := os.WriteFile(os.Getenv("REELRELAY_TEST_ARGS"), encoded, 0o600); err != nil {
 		os.Exit(4)
 	}
 	switch mode {
@@ -54,7 +54,7 @@ func runFakeDownloader(mode string) {
 		fmt.Println("/etc/passwd")
 		return
 	case "symlink":
-		if err := os.Symlink(os.Getenv("IGBOT_TEST_ARGS"), output); err != nil {
+		if err := os.Symlink(os.Getenv("REELRELAY_TEST_ARGS"), output); err != nil {
 			os.Exit(5)
 		}
 	default:
@@ -75,8 +75,8 @@ func fakeDownloader(t *testing.T, mode string) (*Downloader, string, string) {
 	root := t.TempDir()
 	argsFile := filepath.Join(t.TempDir(), "args.json")
 	t.Setenv("TMPDIR", root)
-	t.Setenv("IGBOT_TEST_HELPER", mode)
-	t.Setenv("IGBOT_TEST_ARGS", argsFile)
+	t.Setenv("REELRELAY_TEST_HELPER", mode)
+	t.Setenv("REELRELAY_TEST_ARGS", argsFile)
 	path, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

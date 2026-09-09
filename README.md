@@ -56,13 +56,13 @@ Run `just` to list all commands.
 | Command | Result |
 | --- | --- |
 | `just run` | Run the bot with `.env` |
-| `just build` | Build `bin/igbot` for Linux x64 (`linux/amd64`) |
+| `just build` | Build `bin/reelrelay` for Linux x64 (`linux/amd64`) |
 | `just fmt` | Format Go with gofumpt, plus Nix and Just files |
 | `just fmt-check` | Check gofumpt formatting without changing files |
 | `just lint` | Run the selected Go linters and local file checks |
 | `just check` | Check formatting, static analysis, tests, vulnerabilities, and Kubernetes resources |
 | `just test` | Run race tests in shuffled order with a five-minute timeout |
-| `just docker-build` | Build `igbot:dev` locally |
+| `just docker-build` | Build `reelrelay:dev` locally |
 | `just docker-smoke` | Test the image without credentials or network access |
 | `just docker-run` | Run the image with `.env` |
 | `just k8s-render` | Render the Helm chart without cluster access |
@@ -119,9 +119,9 @@ just docker-run
 For Podman:
 
 ```bash
-CONTAINER_ENGINE=podman just docker-build localhost/igbot:dev
-CONTAINER_ENGINE=podman just docker-smoke localhost/igbot:dev
-CONTAINER_ENGINE=podman just docker-run localhost/igbot:dev
+CONTAINER_ENGINE=podman just docker-build localhost/reelrelay:dev
+CONTAINER_ENGINE=podman just docker-smoke localhost/reelrelay:dev
+CONTAINER_ENGINE=podman just docker-run localhost/reelrelay:dev
 ```
 
 The local run command binds health port 8080 only to `127.0.0.1`. It does not mount a cookie file or a browser profile. Use `INSTAGRAM_SESSION_ID` in `.env`, or add a read-only cookie-file mount to a custom container command.
@@ -159,17 +159,21 @@ ghcr.io/kevinpita/reelrelay
 
 Images receive only the first eight characters of the commit SHA as their tag, with no `sha-` prefix. For example, commit `d5c8c3bdae712df7053669d69db2672f6a928175` produces `ghcr.io/kevinpita/reelrelay:d5c8c3bd`. The executable's `--version` output keeps the full commit SHA. A version tag triggers CI but does not create a second image tag. CI records the published image digest in its job summary. It uses `GITHUB_TOKEN`; no bot credentials belong in CI. The workflow does not configure SBOM or provenance attestations.
 
-The [Helm chart](infra/chart/) uses image and Secret references from [`infra/chart/values.yaml`](infra/chart/values.yaml). The default image uses a published commit tag, not a moving `latest` tag. Helm does not select newer registry tags. To deploy another build, update `image.tag` or set `image.digest` to its published `sha256:...` digest. A non-empty digest takes priority over the tag.
+The [Helm chart](infra/chart/) uses image and Secret references from [`infra/chart/values.yaml`](infra/chart/values.yaml). Replace the `<pending>` image tag with a published commit tag before deployment. Helm does not select newer registry tags. To deploy another build, update `image.tag` or set `image.digest` to its published `sha256:...` digest. A non-empty digest takes priority over the tag.
 
-Create the Secret named by `existingSecret` in the deployment namespace with a `TELEGRAM_BOT_TOKEN` key. Do not commit credentials. For private images, configure `imagePullSecrets`. The chart uses one replica and the `Recreate` strategy because Telegram permits only one long-polling consumer per bot token.
+For OpenBao, follow [the application access setup](infra/openbao/README.md). Terraform manages the application policy and authentication role. The chart uses ESO to copy the single `kv/apps/reelrelay` entry into the Secret named by `existingSecret`. OpenBao sync is disabled until you set the Kubernetes API audience and enable it in the chart values.
+
+Without OpenBao, create the Secret named by `existingSecret` in the deployment namespace with a `TELEGRAM_BOT_TOKEN` key. Do not commit credentials. For private images, configure `imagePullSecrets`. The chart uses one replica and the `Recreate` strategy because Telegram permits only one long-polling consumer per bot token.
 
 ### Argo CD
 
-CI builds, tests, and publishes images. Argo CD applies the deployment configuration from Git. Configure the Argo CD Application to track this repository's `main` branch at `infra/chart`.
+CI builds, tests, and publishes images. Argo CD applies the deployment configuration from Git. Configure the Argo CD Application to track this repository's `main` branch at `infra/chart`, with destination namespace `reelrelay` and the `CreateNamespace=true` sync option.
 
 ```text
 CI → publish GHCR image → update image reference in Git → Argo CD sync → Kubernetes
 ```
+
+For an existing installation, the renamed chart changes the Deployment's immutable label selector. Plan a one-time Deployment replacement and make sure `reelrelay-secrets` is ready first. Do not run the old and new deployments together with the same bot token.
 
 Registry publication alone does not trigger a deployment. Commit the new image tag or digest to the values file that Argo CD uses. Argo CD then deploys it when [automatic sync](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/) is enabled; otherwise, sync the application manually. CI needs no cluster credentials.
 
@@ -178,7 +182,7 @@ Start with reviewed values changes. For automatic image updates, extend CI to op
 Without Argo CD, deploy with Helm after creating the required Secret:
 
 ```bash
-helm upgrade --install igbot infra/chart --namespace igbot --create-namespace
+helm upgrade --install reelrelay infra/chart --namespace reelrelay --create-namespace
 ```
 
 ## Tool versions
@@ -217,5 +221,6 @@ devenv.nix / devenv.lock Development tools and fixed dependency versions
 justfile                Local development commands
 Dockerfile              Non-root runtime image
 .github/                CI and dependency updates
-infra/chart/            Helm chart and deployment values
+infra/chart/            Helm chart, ESO resources, and deployment values
+infra/openbao/          Terraform policy, authentication role, and setup steps
 ```

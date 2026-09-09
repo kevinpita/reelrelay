@@ -96,7 +96,7 @@ func (d *Downloader) DownloadVideo(ctx context.Context, rawURL string) (path str
 	if !validInstagramURL(rawURL) {
 		return "", errors.New("unsupported Instagram media URL")
 	}
-	tempDir, err := os.MkdirTemp("", "igbot_*")
+	tempDir, err := os.MkdirTemp("", "reelrelay_*")
 	if err != nil {
 		return "", fmt.Errorf("create download directory: %w", err)
 	}

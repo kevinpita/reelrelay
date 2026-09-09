@@ -1,0 +1,78 @@
+{{- if .Values.openbao.enabled }}
+{{- if ne .Release.Namespace "reelrelay" }}
+{{- fail "OpenBao access is bound to namespace reelrelay" }}
+{{- end }}
+{{- $audience := required "openbao.audience is required; use an audience accepted by the Kubernetes API" (trim .Values.openbao.audience) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-reader
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: reelrelay-openbao-token-reviewer
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [authentication.k8s.io]
+    resources: [tokenreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: reelrelay-openbao-token-reviewer
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: reelrelay-openbao-token-reviewer
+subjects:
+  - kind: ServiceAccount
+    name: openbao-reader
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: {{ .Release.Namespace }}
+spec:
+  provider:
+    vault:
+      server: {{ required "openbao.server is required" .Values.openbao.server | quote }}
+      path: kv
+      version: v2
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: reelrelay
+          serviceAccountRef:
+            name: openbao-reader
+            audiences:
+              - {{ $audience | quote }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: reelrelay-secrets
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    name: openbao
+    kind: SecretStore
+  target:
+    name: {{ required "existingSecret is required" .Values.existingSecret | quote }}
+    creationPolicy: Owner
+    deletionPolicy: Retain
+  dataFrom:
+    - extract:
+        key: apps/reelrelay
+{{- end }}

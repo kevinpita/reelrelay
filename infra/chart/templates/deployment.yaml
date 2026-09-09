@@ -40,7 +40,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: igbot
+        - name: reelrelay
           {{- if .Values.image.digest }}
           image: {{ printf "%s@%s" $repository .Values.image.digest | quote }}
           {{- else }}

@@ -4,9 +4,16 @@ image:
   digest: ""
   pullPolicy: IfNotPresent
 
-existingSecret: igbot-secrets
+existingSecret: reelrelay-secrets
 cookiesSecret: ""
 imagePullSecrets: []
+
+# Enable after the shared Kubernetes auth mount is ready.
+openbao:
+  enabled: false
+  server: https://bao.kevinpita.com
+  # Terraform reads this value too. Use an audience accepted by the Kubernetes API.
+  audience: "https://kubernetes.default.svc.cluster.local"
 
 maxConcurrentDownloads: 2
 tmpSizeLimit: 1Gi

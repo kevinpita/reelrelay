@@ -9,9 +9,20 @@ cookies*.txt
 .devenv*
 .pre-commit-config.yaml
 
+# Terraform local data and credentials; commit .terraform.lock.hcl
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+*.tfbackend
+crash.log
+crash.*.log
+
 # Build and test output
 /bin/
-/igbot
+/reelrelay
 /yt-dlp
 /yt-dlp.*
 coverage.out
@@ -19,7 +30,7 @@ coverage.out
 *.exe
 
 # Downloaded media
-igbot_*/
+reelrelay_*/
 *.mp4
 *.m4a
 *.webm

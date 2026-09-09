@@ -1,4 +1,4 @@
-module igbot
+module reelrelay
 
 go 1.27.1
 

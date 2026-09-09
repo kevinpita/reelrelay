@@ -1,9 +1,10 @@
 set dotenv-load
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-image := "igbot:dev"
+image := "reelrelay:dev"
 engine := env("CONTAINER_ENGINE", "docker")
 gofumpt := "mvdan.cc/gofumpt@v0.12.0"
+crd_schema := "https://raw.githubusercontent.com/datreeio/CRDs-catalog/ad3b08c5045129d7bb1eeffd8e61719b2c8dd1e2/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
 
 # List available commands.
 default:
@@ -16,7 +17,7 @@ run:
 # Build a static Linux x64 executable.
 build:
     mkdir -p bin
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o bin/igbot .
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o bin/reelrelay .
 
 # Format project Go files with gofumpt, plus Nix and Just files.
 fmt:
@@ -54,12 +55,14 @@ audit:
 
 # Render the Helm chart without accessing a cluster.
 k8s-render:
-    helm template igbot infra/chart --namespace igbot
+    helm template reelrelay infra/chart --namespace reelrelay
 
-# Lint the Helm chart and validate the rendered Kubernetes resources.
+# Lint both Secret modes and validate their rendered Kubernetes resources.
 k8s-check:
-    helm lint --strict infra/chart
-    helm template igbot infra/chart --namespace igbot | kubeconform -strict -summary
+    helm lint --strict infra/chart --namespace reelrelay
+    helm lint --strict infra/chart --namespace reelrelay --set openbao.enabled=true --set-string openbao.audience=validation-only
+    helm template reelrelay infra/chart --namespace reelrelay | kubeconform -strict -summary -schema-location default -schema-location {{ quote(crd_schema) }}
+    helm template reelrelay infra/chart --namespace reelrelay --set openbao.enabled=true --set-string openbao.audience=validation-only | kubeconform -strict -summary -schema-location default -schema-location {{ quote(crd_schema) }}
 
 # Run all local checks.
 check: lint test audit k8s-check
