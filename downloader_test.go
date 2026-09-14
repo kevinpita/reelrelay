@@ -200,3 +200,72 @@ func TestDownloadRejectsUnsupportedURL(t *testing.T) {
 		t.Fatal("unsupported URL was accepted")
 	}
 }
+
+func TestExtractMediaURL(t *testing.T) {
+	for _, raw := range []string{
+		"https://twitter.com/user/status/123",
+		"https://www.twitter.com/user/status/123/",
+		"https://mobile.twitter.com/user/status/123?s=20",
+		"https://x.com/user/status/123",
+		"https://www.x.com/user/status/123/video/1",
+		"https://mobile.x.com/i/web/status/123",
+		"https://x.com/user/status/123/photo/1",
+		"https://instagram.com/reel/abc/",
+	} {
+		if got := ExtractMediaURL("Watch (" + raw + ")."); got != raw {
+			t.Errorf("ExtractMediaURL(%q) = %q", raw, got)
+		}
+	}
+	for _, raw := range []string{
+		"https://x.com/user", "https://x.com/user/status/abc",
+		"https://x.com/user/status/123/extra", "https://x.com/home",
+		"https://x.com.evil.example/user/status/123",
+		"https://x.com@evil.example/user/status/123",
+		"https://evil.example@x.com/user/status/123",
+		"https://x.com:443/user/status/123", "https://t.co/abc",
+		"file://x.com/user/status/123",
+	} {
+		if got := ExtractMediaURL(raw); got != "" || validMediaURL(raw) {
+			t.Errorf("unsupported URL accepted: %q (extracted %q)", raw, got)
+		}
+	}
+	text := "https://x.com/home https://x.com/user/status/123 https://instagram.com/p/abc/"
+	if got := ExtractMediaURL(text); got != "https://x.com/user/status/123" {
+		t.Fatalf("first supported link = %q", got)
+	}
+}
+
+func TestDownloadTwitterVideo(t *testing.T) {
+	for _, host := range []string{"twitter.com", "x.com"} {
+		t.Run(host, func(t *testing.T) {
+			d, _, argsFile := fakeDownloader(t, "success")
+			d.cookiesFile = "/must-not-read-instagram-cookies"
+			d.sessionID = "instagram-secret"
+			d.cookiesBrowser = "firefox"
+			raw := "https://" + host + "/user/status/123?s=20"
+			path, err := d.DownloadVideo(t.Context(), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(path); err != nil || string(data) != "fake video" {
+				t.Fatalf("download = %q, %v", data, err)
+			}
+			data, err := os.ReadFile(argsFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var args []string
+			if err := json.Unmarshal(data, &args); err != nil {
+				t.Fatal(err)
+			}
+			for _, arg := range args {
+				if arg == "--cookies" || arg == "--cookies-from-browser" {
+					t.Fatalf("Instagram authentication passed to Twitter: %v", args)
+				}
+			}
+			if !reflect.DeepEqual(args[len(args)-2:], []string{"--", raw}) {
+				t.Fatalf("incorrect URL arguments: %v", args)
+			}
+		})
+	}
+}

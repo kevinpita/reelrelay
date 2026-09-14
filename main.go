@@ -139,13 +139,13 @@ func run(ctx context.Context) error {
 				text = msg.Caption
 			}
 			if msg.Command() == "start" || msg.Command() == "help" {
-				sendReply(bot, msg, "Send an Instagram reel or post link. I will send its video to this chat.")
+				sendReply(bot, msg, "Send an Instagram reel or post link, or a Twitter/X post link. I will send its video to this chat.")
 				continue
 			}
-			igURL := ExtractInstagramURL(text)
-			if igURL == "" {
+			mediaURL := ExtractMediaURL(text)
+			if mediaURL == "" {
 				if msg.Chat.IsPrivate() {
-					sendReply(bot, msg, "Please send a valid Instagram post or reel link.")
+					sendReply(bot, msg, "Please send a valid Instagram or Twitter/X post link.")
 				}
 				continue
 			}
@@ -153,7 +153,7 @@ func run(ctx context.Context) error {
 			case slots <- struct{}{}:
 				active.Go(func() {
 					defer func() { <-slots }()
-					processInstagramMessage(ctx, bot, downloader, msg, igURL)
+					processMediaMessage(ctx, bot, downloader, msg, mediaURL)
 				})
 			default:
 				sendReply(bot, msg, "The bot is busy. Please try again shortly.")
@@ -183,10 +183,10 @@ func sendReply(bot *tgbotapi.BotAPI, msg *tgbotapi.Message, text string) {
 	_, _ = bot.Send(reply)
 }
 
-func processInstagramMessage(parent context.Context, bot *tgbotapi.BotAPI, downloader *Downloader, msg *tgbotapi.Message, igURL string) {
+func processMediaMessage(parent context.Context, bot *tgbotapi.BotAPI, downloader *Downloader, msg *tgbotapi.Message, mediaURL string) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Minute)
 	defer cancel()
-	status, statusErr := bot.Send(tgbotapi.NewMessage(msg.Chat.ID, "Downloading Instagram video..."))
+	status, statusErr := bot.Send(tgbotapi.NewMessage(msg.Chat.ID, "Downloading video..."))
 	defer func() {
 		if statusErr == nil {
 			_, _ = bot.Request(tgbotapi.NewDeleteMessage(msg.Chat.ID, status.MessageID))
@@ -194,13 +194,13 @@ func processInstagramMessage(parent context.Context, bot *tgbotapi.BotAPI, downl
 	}()
 	_, _ = bot.Request(tgbotapi.NewChatAction(msg.Chat.ID, tgbotapi.ChatUploadVideo))
 
-	videoPath, err := downloader.DownloadVideo(ctx, igURL)
+	videoPath, err := downloader.DownloadVideo(ctx, mediaURL)
 	if err != nil {
 		if parent.Err() != nil {
 			return
 		}
 		log.Printf("Download failed: %v", err)
-		text := "Cannot download this video. It may be private, unavailable, or too large. The operator may need to configure Instagram cookies."
+		text := "Cannot download this video. It may be private, unavailable, or too large. Login may be required."
 		if errors.Is(err, ErrVideoTooLarge) {
 			text = "The video exceeds the 50 MiB upload limit."
 		}

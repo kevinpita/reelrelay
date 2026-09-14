@@ -1,8 +1,8 @@
 # ReelRelay
 
-**Send an Instagram link to Telegram. Receive the video in the same chat.**
+**Send an Instagram or Twitter/X link to Telegram. Receive the video in the same chat.**
 
-A small Go bot for Instagram posts, reels, and share links. It uses Telegram long polling, so it needs no public URL or webhook.
+A small Go bot for Instagram posts, reels, and share links, plus Twitter/X video posts. It uses Telegram long polling, so it needs no public URL or webhook.
 
 ```text
 Telegram message → Go bot → yt-dlp → temporary video → Telegram upload
@@ -45,7 +45,9 @@ devenv shell
 just run
 ```
 
-Send `/start`, then an Instagram post or reel link to the bot.
+Send `/start`, then an Instagram post, reel, or Twitter/X post link to the bot.
+
+Twitter/X links must use `twitter.com` or `x.com` with a post path such as `/user/status/123`. The `www` and `mobile` hosts and `/i/web/status/123` paths are also accepted. Short `t.co` links are not supported.
 
 The locked development environment includes Go, a C compiler for race tests, `yt-dlp`, FFmpeg, Just, and validation tools. Without Nix, install these tools yourself. Use `just run` to load `.env`; the Go executable reads only process environment variables.
 
@@ -70,7 +72,7 @@ Run `just` to list all commands.
 | `just update-tools` | Update `devenv.lock`; review and test the changes |
 | `just clean` | Remove generated Go build and coverage files |
 
-Go tests use a local Telegram HTTP server and a test downloader process. They need no credentials or Instagram access. Dependency downloads, the vulnerability check, and Kubernetes schema validation need network access.
+Go tests use a local Telegram HTTP server and a test downloader process. They need no credentials or live platform access. Dependency downloads, the vulnerability check, and Kubernetes schema validation need network access.
 
 ## Go style and lint policy
 
@@ -102,6 +104,8 @@ Gofumpt runs separately because the current golangci-lint release embeds an olde
 
 Use one Instagram authentication method. A cookie file takes priority over a session ID; a session ID takes priority over browser cookies. Each request gets a private, writable cookie copy. The source file stays unchanged, including when it comes from a read-only Kubernetes Secret.
 
+Twitter/X downloads use public access. Instagram cookie settings apply only to Instagram. Twitter/X authentication is not configured, so posts that require login may fail.
+
 Keep `.env` and cookie files private. Git ignores them. The container build accepts only source files and dependency manifests, so local credentials cannot enter the image.
 
 ## Container
@@ -129,7 +133,7 @@ The local run command binds health port 8080 only to `127.0.0.1`. It does not mo
 - `GET /healthz`: the health server is running.
 - `GET /readyz`: startup succeeded and shutdown has not started.
 
-Readiness does not test current Telegram or Instagram availability. Both services can fail after startup. Do not expose the health port through a public Ingress.
+Readiness does not test current Telegram, Instagram, or Twitter/X availability. These services can fail after startup. Do not expose the health port through a public Ingress.
 
 ## CI and deployment
 
@@ -204,10 +208,10 @@ Dependabot checks Go modules, Python requirements, container bases, and Actions 
 
 - The bot accepts requests from anyone who can message it. There is no user allowlist or persistent job queue.
 - Downloads in progress are cancelled during a restart. Jobs are not durable and may need to be sent again.
-- Instagram can require login, change its API, or limit requests. Cookies do not guarantee access.
+- Instagram and Twitter/X can require login, change its API, or limit requests. Cookies do not guarantee access.
 - Photo-only posts are not supported. Multi-item posts return at most one video.
 - In groups, Telegram privacy mode can prevent the bot from receiving ordinary links. Configure it through BotFather if needed.
-- Download only media you have permission to use. Follow Instagram and Telegram terms.
+- Download only media you have permission to use. Follow Instagram, Twitter/X, and Telegram terms.
 
 ## Repository map
 

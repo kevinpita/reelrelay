@@ -17,6 +17,8 @@ const maxVideoBytes = 50 * 1024 * 1024
 
 var (
 	instagramURLRegex = regexp.MustCompile(`https?://(?:www\.)?instagram\.com/[^\s<>]+`)
+	mediaURLRegex     = regexp.MustCompile(`https?://(?:www\.|mobile\.)?(?:instagram\.com|twitter\.com|x\.com)/[^\s<>]+`)
+	twitterPathRegex  = regexp.MustCompile(`^/(?:[a-zA-Z0-9_]{1,15}/status|i/web/status)/[0-9]+(?:/(?:video|photo)/[0-9]+)?/?$`)
 	mediaPathRegex    = regexp.MustCompile(`^/(?:p|reel|reels|tv|share(?:/(?:reel|p))?)/[a-zA-Z0-9_-]+/?$`)
 	ErrVideoTooLarge  = errors.New("video exceeds Telegram's 50 MiB upload limit")
 )
@@ -30,6 +32,34 @@ func ExtractInstagramURL(text string) string {
 		}
 	}
 	return ""
+}
+
+// ExtractMediaURL returns the first supported Instagram or Twitter/X post link.
+func ExtractMediaURL(text string) string {
+	for _, match := range mediaURLRegex.FindAllString(text, -1) {
+		match = strings.TrimRight(match, ".,!?:;)'\"]}")
+		if validMediaURL(match) {
+			return match
+		}
+	}
+	return ""
+}
+
+func validMediaURL(raw string) bool {
+	return validInstagramURL(raw) || validTwitterURL(raw)
+}
+
+func validTwitterURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+		return false
+	}
+	switch u.Host {
+	case "twitter.com", "www.twitter.com", "mobile.twitter.com", "x.com", "www.x.com", "mobile.x.com":
+		return twitterPathRegex.MatchString(u.Path)
+	default:
+		return false
+	}
 }
 
 func validInstagramURL(raw string) bool {
@@ -93,8 +123,8 @@ func ensureYtDlp() (string, error) {
 // DownloadVideo returns a file in a private temporary directory.
 // The caller must remove the directory after upload. Failed downloads clean up here.
 func (d *Downloader) DownloadVideo(ctx context.Context, rawURL string) (path string, err error) {
-	if !validInstagramURL(rawURL) {
-		return "", errors.New("unsupported Instagram media URL")
+	if !validMediaURL(rawURL) {
+		return "", errors.New("unsupported media URL")
 	}
 	tempDir, err := os.MkdirTemp("", "reelrelay_*")
 	if err != nil {
@@ -113,14 +143,17 @@ func (d *Downloader) DownloadVideo(ctx context.Context, rawURL string) (path str
 		"--print", "after_move:filepath", "--no-progress", "--no-warnings",
 		"--socket-timeout", "30", "--retries", "2",
 	}
-	cookies, err := d.prepareCookies(tempDir)
-	if err != nil {
-		return "", err
-	}
-	if cookies != "" {
-		args = append(args, "--cookies", cookies)
-	} else if d.cookiesBrowser != "" {
-		args = append(args, "--cookies-from-browser", d.cookiesBrowser)
+	// Instagram authentication settings must not affect Twitter/X downloads.
+	if validInstagramURL(rawURL) {
+		cookies, err := d.prepareCookies(tempDir)
+		if err != nil {
+			return "", err
+		}
+		if cookies != "" {
+			args = append(args, "--cookies", cookies)
+		} else if d.cookiesBrowser != "" {
+			args = append(args, "--cookies-from-browser", d.cookiesBrowser)
+		}
 	}
 	args = append(args, "--", rawURL)
 	cmd := exec.CommandContext(ctx, d.ytDlpPath, args...)

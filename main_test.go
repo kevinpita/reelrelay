@@ -79,61 +79,65 @@ func TestTelegramClientCancelsAndRedacts(t *testing.T) {
 	}
 }
 
-func TestProcessInstagramMessage(t *testing.T) {
-	d, root, _ := fakeDownloader(t, "success")
-	var uploaded, deleted atomic.Bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/getMe"):
-			_, _ = io.WriteString(w, `{"ok":true,"result":{"id":1,"is_bot":true,"username":"testbot"}}`)
-		case strings.HasSuffix(r.URL.Path, "/sendVideo"):
-			if err := r.ParseMultipartForm(1024 * 1024); err != nil {
-				t.Error(err)
-				http.Error(w, "invalid upload", http.StatusBadRequest)
-				return
-			}
-			defer func() {
-				if err := r.MultipartForm.RemoveAll(); err != nil {
-					t.Error(err)
+func TestProcessMediaMessage(t *testing.T) {
+	for _, raw := range []string{"https://instagram.com/reel/abc/", "https://x.com/user/status/123", "https://twitter.com/user/status/123"} {
+		t.Run(raw, func(t *testing.T) {
+			d, root, _ := fakeDownloader(t, "success")
+			var uploaded, deleted atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/getMe"):
+					_, _ = io.WriteString(w, `{"ok":true,"result":{"id":1,"is_bot":true,"username":"testbot"}}`)
+				case strings.HasSuffix(r.URL.Path, "/sendVideo"):
+					if err := r.ParseMultipartForm(1024 * 1024); err != nil {
+						t.Error(err)
+						http.Error(w, "invalid upload", http.StatusBadRequest)
+						return
+					}
+					defer func() {
+						if err := r.MultipartForm.RemoveAll(); err != nil {
+							t.Error(err)
+						}
+					}()
+					file, _, err := r.FormFile("video")
+					if err != nil {
+						t.Error(err)
+						http.Error(w, "missing video", http.StatusBadRequest)
+						return
+					}
+					data, err := io.ReadAll(file)
+					if closeErr := file.Close(); closeErr != nil {
+						t.Error(closeErr)
+					}
+					if err != nil || string(data) != "fake video" || r.FormValue("chat_id") != "42" {
+						t.Errorf("invalid upload: %q, %v", data, err)
+					}
+					uploaded.Store(true)
+					_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":2}}`)
+				case strings.HasSuffix(r.URL.Path, "/deleteMessage"):
+					deleted.Store(true)
+					_, _ = io.WriteString(w, `{"ok":true,"result":true}`)
+				case strings.HasSuffix(r.URL.Path, "/sendChatAction"):
+					_, _ = io.WriteString(w, `{"ok":true,"result":true}`)
+				default:
+					_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":1}}`)
 				}
-			}()
-			file, _, err := r.FormFile("video")
+			}))
+			defer server.Close()
+			bot, err := tgbotapi.NewBotAPIWithAPIEndpoint("test-token", server.URL+"/bot%s/%s")
 			if err != nil {
-				t.Error(err)
-				http.Error(w, "missing video", http.StatusBadRequest)
-				return
+				t.Fatal(err)
 			}
-			data, err := io.ReadAll(file)
-			if closeErr := file.Close(); closeErr != nil {
-				t.Error(closeErr)
+			msg := &tgbotapi.Message{MessageID: 7, Chat: &tgbotapi.Chat{ID: 42}}
+			processMediaMessage(t.Context(), bot, d, msg, raw)
+			if !uploaded.Load() || !deleted.Load() {
+				t.Fatalf("upload=%v, status deleted=%v", uploaded.Load(), deleted.Load())
 			}
-			if err != nil || string(data) != "fake video" || r.FormValue("chat_id") != "42" {
-				t.Errorf("invalid upload: %q, %v", data, err)
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("temporary files remain after upload: %v, %v", entries, err)
 			}
-			uploaded.Store(true)
-			_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":2}}`)
-		case strings.HasSuffix(r.URL.Path, "/deleteMessage"):
-			deleted.Store(true)
-			_, _ = io.WriteString(w, `{"ok":true,"result":true}`)
-		case strings.HasSuffix(r.URL.Path, "/sendChatAction"):
-			_, _ = io.WriteString(w, `{"ok":true,"result":true}`)
-		default:
-			_, _ = io.WriteString(w, `{"ok":true,"result":{"message_id":1}}`)
-		}
-	}))
-	defer server.Close()
-	bot, err := tgbotapi.NewBotAPIWithAPIEndpoint("test-token", server.URL+"/bot%s/%s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	msg := &tgbotapi.Message{MessageID: 7, Chat: &tgbotapi.Chat{ID: 42}}
-	processInstagramMessage(t.Context(), bot, d, msg, "https://instagram.com/reel/abc/")
-	if !uploaded.Load() || !deleted.Load() {
-		t.Fatalf("upload=%v, status deleted=%v", uploaded.Load(), deleted.Load())
-	}
-	entries, err := os.ReadDir(root)
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("temporary files remain after upload: %v, %v", entries, err)
+		})
 	}
 }
