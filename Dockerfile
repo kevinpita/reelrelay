@@ -8,7 +8,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /reelrelay .
 
-FROM docker.io/library/python:3.13.15-slim-trixie@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS downloader
+FROM docker.io/library/python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS downloader
 COPY requirements.txt /requirements.txt
 # Match the interpreter path in distroless for the generated yt-dlp launcher.
 RUN ln -s /usr/local/bin/python /usr/bin/python \
