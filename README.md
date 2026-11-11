@@ -190,9 +190,9 @@ helm upgrade --install reel-relay oci://ghcr.io/kevinpita/charts/reelrelay --nam
 
 ## Tool versions
 
-Versions were checked on **2026-09-08**:
+Pinned versions:
 
-- Go **1.27.1** in `go.mod` and the builder image.
+- Go **1.27.4** in `go.mod` and the builder image.
 - golangci-lint **2.13.2**, gofumpt **0.12.0**, and govulncheck **1.7.0**.
 - Python **3.13** in the distroless Debian 13 runtime; the dependency stage uses the same Python minor version.
 - FFmpeg and FFprobe **9.0.1** as static binaries.
