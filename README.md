@@ -193,7 +193,7 @@ helm upgrade --install reel-relay oci://ghcr.io/kevinpita/charts/reelrelay --nam
 Pinned versions:
 
 - Go **1.27.4** in `go.mod` and the builder image.
-- golangci-lint **2.13.2**, gofumpt **0.12.0**, and govulncheck **1.7.0**.
+- golangci-lint **2.15.0**, gofumpt **0.12.0**, and govulncheck **1.7.0**.
 - Python **3.13** in the distroless Debian 13 runtime; the dependency stage uses the same Python minor version.
 - FFmpeg and FFprobe **9.0.1** as static binaries.
 - `yt-dlp` **2026.08.19** in `requirements.txt` and the development environment.
