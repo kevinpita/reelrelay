@@ -44,7 +44,8 @@ spec:
           {{- if .Values.image.digest }}
           image: {{ printf "%s@%s" $repository .Values.image.digest | quote }}
           {{- else }}
-          image: {{ printf "%s:%s" $repository (.Values.image.tag | default .Chart.Version) | quote }}
+          {{- /* Flux appends "+<digest>" to the chart version. A tag cannot contain "+". */}}
+          image: {{ printf "%s:%s" $repository (.Values.image.tag | default (splitList "+" .Chart.Version | first)) | quote }}
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
