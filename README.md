@@ -145,56 +145,55 @@ Readiness does not test current Telegram, Instagram, or Twitter/X availability. 
 
 ```text
 Go lint ─────────────┐
-Go tests ────────────┼─→ Image: build → test → publish when allowed
+Go tests ────────────┼─→ Image: build → test → reserve version → publish image and chart when allowed
 Go vulnerabilities ─┘
 ```
 
-The image job depends on all three checks. A failed, cancelled, or skipped check prevents the image job from starting. The image is built once, tested, then published without rebuilding. Only the image job has package-write permission.
+The image job depends on all three checks. A failed, cancelled, or skipped check prevents the image job from starting. The image is built once, tested, then published without rebuilding. Only the image job has package-write and tag-write permission.
 
 Require **Go lint**, **Go tests**, and **Go vulnerabilities** in GitHub branch protection. Do not rely only on **Image**, because GitHub treats skipped jobs differently from failed checks.
 
 CI does not install Nix, devenv, or Just. Run `just check` locally for the additional Nix formatting, workflow, Dockerfile, Helm, and Kubernetes schema checks.
 
-Pull requests do **not** publish images. Pushes to `main` and version tags such as `v1.0.0` publish `linux/amd64` images to:
+Pull requests do **not** publish. Each push to `main` publishes a `linux/amd64` image and the Helm chart with the same version:
 
 ```text
-ghcr.io/kevinpita/reelrelay
+ghcr.io/kevinpita/reelrelay:<version>
+ghcr.io/kevinpita/charts/reelrelay:<version>
 ```
 
-Images receive only the first eight characters of the commit SHA as their tag, with no `sha-` prefix. For example, commit `d5c8c3bdae712df7053669d69db2672f6a928175` produces `ghcr.io/kevinpita/reelrelay:d5c8c3bd`. The executable's `--version` output keeps the full commit SHA. A version tag triggers CI but does not create a second image tag. CI records the published image digest in its job summary. It uses `GITHUB_TOKEN`; no bot credentials belong in CI. The workflow does not configure SBOM or provenance attestations.
+CI selects the version. `version` in [`infra/chart/Chart.yaml`](infra/chart/Chart.yaml) is the minimum. While a `v<version>` Git tag exists for it, CI uses the highest tag plus one patch: `0.1.0`, then `0.1.1`, then `0.1.2`. To start a new minor or major version, change `version` in `Chart.yaml`. CI records each version as a Git tag on the commit it built, before it publishes. A run that fails after that step leaves a tag without an image, and the next run takes the next version.
 
-The [Helm chart](infra/chart/) uses image and Secret references from [`infra/chart/values.yaml`](infra/chart/values.yaml). Replace the `<pending>` image tag with a published commit tag before deployment. Helm does not select newer registry tags. To deploy another build, update `image.tag` or set `image.digest` to its published `sha256:...` digest. A non-empty digest takes priority over the tag.
+The executable's `--version` output keeps the full commit SHA. CI records the published image digest in its job summary. It uses `GITHUB_TOKEN`; no bot credentials belong in CI. The workflow does not configure SBOM or provenance attestations.
+
+The [Helm chart](infra/chart/) uses image and Secret references from [`infra/chart/values.yaml`](infra/chart/values.yaml). With an empty `image.tag`, the chart deploys the image that has the chart's own version. To deploy a different image, set `image.tag` or set `image.digest` to a published `sha256:...` digest. A non-empty digest takes priority over the tag.
 
 For OpenBao, follow [the application access setup](infra/openbao/README.md). Terraform manages the application policy and authentication role. The chart uses ESO to copy the single `kv/apps/reelrelay` entry into the Secret named by `existingSecret`. OpenBao sync is disabled until you set the Kubernetes API audience and enable it in the chart values.
 
 Without OpenBao, create the Secret named by `existingSecret` in the deployment namespace with a `TELEGRAM_BOT_TOKEN` key. Do not commit credentials. For private images, configure `imagePullSecrets`. The chart uses one replica and the `Recreate` strategy because Telegram permits only one long-polling consumer per bot token.
 
-### Argo CD
+### Flux
 
-CI builds, tests, and publishes images. Argo CD applies the deployment configuration from Git. Configure the Argo CD Application to track this repository's `main` branch at `infra/chart`, with destination namespace `reelrelay` and the `CreateNamespace=true` sync option.
+CI builds, tests, and publishes. Flux deploys the highest published chart version. The `flux-config` repository holds the `OCIRepository` and the `HelmRelease` for namespace `reelrelay`. CI needs no cluster credentials.
 
 ```text
-CI → publish GHCR image → update image reference in Git → Argo CD sync → Kubernetes
+CI → publish GHCR image → publish GHCR chart → Flux Helm upgrade → Kubernetes
 ```
 
-For an existing installation, the renamed chart changes the Deployment's immutable label selector. Plan a one-time Deployment replacement and make sure `reelrelay-secrets` is ready first. Do not run the old and new deployments together with the same bot token.
+Every successful push to `main` deploys. To roll back, pin an earlier chart version in the `OCIRepository`.
 
-Registry publication alone does not trigger a deployment. Commit the new image tag or digest to the values file that Argo CD uses. Argo CD then deploys it when [automatic sync](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/) is enabled; otherwise, sync the application manually. CI needs no cluster credentials.
-
-Start with reviewed values changes. For automatic image updates, extend CI to open a values-update pull request after a successful image push. [Argo CD Image Updater with Git write-back](https://argocd-image-updater.readthedocs.io/en/stable/basics/update-methods/#git-write-back-method) is an alternative. Use only one of these to update image references. Before enabling either method, exclude values-only commits from image publication to prevent an update loop. Neither method is configured here.
-
-Without Argo CD, deploy with Helm after creating the required Secret:
+Without Flux, deploy a published version with Helm after creating the required Secret:
 
 ```bash
-helm upgrade --install reelrelay infra/chart --namespace reelrelay --create-namespace
+helm upgrade --install reel-relay oci://ghcr.io/kevinpita/charts/reelrelay --namespace reelrelay --create-namespace
 ```
 
 ## Tool versions
 
-Versions were checked on **2026-09-08**:
+Pinned versions:
 
-- Go **1.27.1** in `go.mod` and the builder image.
-- golangci-lint **2.13.2**, gofumpt **0.12.0**, and govulncheck **1.7.0**.
+- Go **1.27.4** in `go.mod` and the builder image.
+- golangci-lint **2.15.0**, gofumpt **0.12.0**, and govulncheck **1.7.0**.
 - Python **3.13** in the distroless Debian 13 runtime; the dependency stage uses the same Python minor version.
 - FFmpeg and FFprobe **9.0.1** as static binaries.
 - `yt-dlp` **2026.08.19** in `requirements.txt` and the development environment.

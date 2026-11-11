@@ -46,9 +46,7 @@ kubectl -n default create token default --duration=10m | python3 -c \
   'import base64,json,sys; p=sys.stdin.read().strip().split(".")[1]; print(json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4)))["aud"][0])'
 ```
 
-In [`../chart/values.yaml`](../chart/values.yaml), set `openbao.audience` to that value and set `openbao.enabled: true`. Terraform reads the same file. Do not override these fields only in Argo CD. Do not use an arbitrary audience such as `vault`: the login JWT also authenticates to the Kubernetes API.
-
-Set `image.tag` or `image.digest` to a published image. The current `<pending>` tag is not deployable. Do not commit or sync the values yet if Argo CD has automatic sync enabled.
+In [`../chart/values.yaml`](../chart/values.yaml), set `openbao.audience` to that value. Terraform reads the same file. Do not override the audience only in the Flux `HelmRelease`. Do not use an arbitrary audience such as `vault`: the login JWT also authenticates to the Kubernetes API.
 
 ## 3. Apply application access
 
@@ -85,13 +83,13 @@ rm "$state_dir/access.tfplan"
 
 Keep state and plans private. Back up the state directory securely. Use this same backend path for all later runs, and do not run concurrent applies. Git ignores state, plans, and variable files; commit `.terraform.lock.hcl`.
 
-## 4. Sync with Argo CD
+## 4. Deploy with Flux
 
-Use the existing Application with source path `infra/chart` and destination namespace `reelrelay`. Let Argo CD create the namespace with `CreateNamespace=true`; the chart does not declare a second Namespace object. Argo CD must be allowed to manage the chart's ClusterRole and ClusterRoleBinding.
+The `HelmRelease` in the `flux-config` repository installs the chart in namespace `reelrelay` and sets `openbao.enabled: true`. Flux creates the namespace; the chart does not declare a second Namespace object. Flux must be allowed to manage the chart's ClusterRole and ClusterRoleBinding.
 
-Keep only one installation of this chart in `reelrelay`. Before the first sync, check for existing `openbao-reader`, `openbao`, `reelrelay-secrets`, and the target Secret. Resolve any other owner's resources before ESO adopts the target. Do not apply the chart with Helm as well as Argo CD.
+Keep only one installation of this chart in `reelrelay`. Before the first installation, check for existing `openbao-reader`, `openbao`, `reelrelay-secrets`, and the target Secret. Resolve any other owner's resources before ESO adopts the target. Do not apply the chart with Helm as well as Flux.
 
-Commit the reviewed values and sync the Application. Then check readiness without printing Secret data:
+After Flux installs the release, check readiness without printing Secret data:
 
 ```bash
 kubectl -n reelrelay wait secretstore/openbao --for=condition=Ready --timeout=120s
