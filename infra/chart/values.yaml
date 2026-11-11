@@ -1,6 +1,7 @@
 image:
   repository: ghcr.io/kevinpita/reelrelay
-  tag: <pending>
+  # Empty uses the chart version. CI publishes the image and the chart with the same version.
+  tag: ""
   digest: ""
   pullPolicy: IfNotPresent
 
