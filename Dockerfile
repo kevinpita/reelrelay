@@ -15,7 +15,7 @@ RUN ln -s /usr/local/bin/python /usr/bin/python \
     && /usr/bin/python -m pip install --no-cache-dir --no-compile --require-hashes --target=/opt/yt-dlp -r /requirements.txt
 
 FROM docker.io/mwader/static-ffmpeg:9.0.2-1@sha256:f5d100184884eb3e82b0eb14bb5ebf98da99826ac824989720297fb9ef21c822 AS ffmpeg
-FROM gcr.io/distroless/python3-debian13:nonroot@sha256:8ee214843129f43e2ebf5e0ca9f2e4e6d8292143d1b8a6787f169b5898578884
+FROM gcr.io/distroless/python3-debian13:nonroot@sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71
 COPY --from=build /reelrelay /usr/local/bin/reelrelay
 COPY --from=downloader /opt/yt-dlp /opt/yt-dlp
 COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
